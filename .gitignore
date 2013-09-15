@@ -1,0 +1,6 @@
+*.o
+*.hex
+*.elf
+*.map
+*~
+doornode-xmega.*
