@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -6,8 +7,7 @@
 #include "adc.h"
 #include "serial.h"
 #include "iocard.h"
-
-#define BLINK_DELAY_MS 1000
+#include "timer.h"
 
 static void set_32mhz()
 {
@@ -23,10 +23,31 @@ long map(long x, long in_min, long in_max, long out_min, long out_max)
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-static void set_output(uint8_t value)
+static void set_pin(uint8_t pin)
 {
-	PORTC.OUT = value & 0xFC;
-	PORTE.OUT = value & 0x03;
+	if (pin < 2) {
+		PORTE.OUTSET = (1 << pin);
+	} else {
+		PORTC.OUTSET = (1 << pin);
+	}
+}
+
+static void clr_pin(uint8_t pin)
+{
+	if (pin < 2) {
+		PORTE.OUTCLR = (1 << pin);
+	} else {
+		PORTC.OUTCLR = (1 << pin);
+	}
+}
+
+static struct {
+	uint8_t  triggered;
+//	uint16_t adval;
+} cctrl[12];
+
+void timer_callback()
+{
 }
 
 int main(void)
@@ -34,41 +55,64 @@ int main(void)
 	//set_32mhz();
 	serial_init(0);
         adc_init();
+	timer_init(*timer_callback);
 
 	//PORTA.DIR = (1 << 4);
 	PORTC.DIR = 0xFC;
 	PORTC.OUT = 0xFC;
 	PORTE.DIR = 0x03;
 	PORTE.OUT = 0x03;
+	PORTC.OUTCLR = (1<<5);
 
-	uint16_t ad;
+	PMIC.CTRL |= PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm; 
+	sei(); // Interrupts aktivieren
+	
+	int16_t ad;
 	char str[40];
 
 	_delay_ms(100);
 
 	serial_send_string("\r\nStarting up...\r\n");
 
-	int c = 0;
+	int16_t mA;
+	uint8_t ch = 0, skip_next;
 
-#if 1
+	timers[8] = 1000;
+
 	while(1) {
-		set_output(1 << c);
-		c++;
-		if (c > 7)
-			c = 0;
-		_delay_ms(50);
+		if (timers[8] == 0) {
+			timers[8] = 1000;
+			serial_send_string("1 sec...\r\n");
+		}
+
+		ad = adc_read(ch);
+
+		//cctrl[ch].adval = ad;
+		skip_next = 0;
+		if (ch <= 7) {
+			mA = map(ad, 140, 662, 200, 947);
+			if (!cctrl[ch].triggered && mA > 400) {
+				clr_pin(ch);
+
+				cctrl[ch].triggered = 1;
+				timers[ch] = 1000;
+
+				sprintf(str, "Over current (%d mA) detected on ch %d!\r\n", mA, ch);
+				serial_send_string(str);
+			}
+
+			if (cctrl[ch].triggered && timers[ch] == 0) {
+				cctrl[ch].triggered = 0;
+				skip_next = 1;
+
+				sprintf(str, "Re-activating output on ch %d.\r\n", ch);
+				serial_send_string(str);
+
+				set_pin(ch);
+			}
+		}
+
+		if (!skip_next)
+			ch++;
 	}
-#else
-	while(1) {
-		PORTC.OUTTGL = (1 << 5);
-		//PORTC.OUTTGL = (1 << 0) | (1 << 1);
-		_delay_ms(500);
-		ad = adc_read(6);
-		//sprintf(str, "degrees_x10: %d\n", degrees_x10);
-		sprintf(str, "ADC = %d, mA = %d\n", ad, map(ad, 0, 2048, 0, 3030));
-		
-		//serial_send_string("Ett till varv...\n");
-		serial_send_string(str);
-	}
-#endif
 }

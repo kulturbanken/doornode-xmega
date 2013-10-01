@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stddef.h> 
 #include <avr/io.h>
-#include <avr/pgmspace.h> 
+#include <avr/pgmspace.h>
+#include <util/delay.h>
 
 #include "adc.h"
 
@@ -27,7 +28,7 @@ void adc_init()
 	ADCA.CTRLA = 0x01; /* enable ADC */
 	ADCA.CTRLB = ADC_RESOLUTION_12BIT_gc | ADC_CONMODE_bm; /* 12bit + signed mode */
 	ADCA.REFCTRL = ADC_REFSEL_INT1V_gc /* | ADC_TEMPREF_bm*/;
-	ADCA.PRESCALER = ADC_PRESCALER_DIV512_gc;
+	ADCA.PRESCALER = ADC_PRESCALER_DIV8_gc;
 }
 
 #if 0
@@ -40,8 +41,9 @@ int16_t adc_get_cpu_temp()
 	ref += read_calibration_byte(offsetof(NVM_PROD_SIGNATURES_t, TEMPSENSE1)) << 8;
 	kelvin_per_adc_x10 = ((273 + 85)*10) / (float)ref; // reference is ADC reading at 85C, scaled by 10 to get units of 0.1C
 
-	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_INTERNAL_gc | ADC_CH_GAIN_2X_gc;
+	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_INTERNAL_gc | ADC_CH_GAIN_1X_gc;
 	ADCA.CH0.MUXCTRL = ADC_CH_MUXINT_TEMP_gc; /* Temperature */
+	ADCA.CH0.INTFLAGS = 0x01; /* Clear interrupt flag */
 	ADCA.CH0.CTRL |= ADC_CH_START_bm;
 	while(!ADCA.CH0.INTFLAGS);
 
@@ -57,12 +59,18 @@ int16_t adc_read(uint8_t channel)
 {
 	int16_t adval;
 
-	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc | ADC_CH_GAIN_2X_gc;
-	ADCA.CH0.MUXCTRL = channel << 3;
+	//ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc | ADC_CH_GAIN_1X_gc;
+	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_DIFF_gc | ADC_CH_GAIN_1X_gc;
+	ADCA.CH0.MUXCTRL  = ((channel & 0x0F) << 3);
+	ADCA.CH0.MUXCTRL |= 0x05; /* PAD GND as negative reference */
+	//ADCA.CH0.MUXCTRL |= ADC_CH_MUXNEG_PIN3_gc;
+
+	ADCA.CH0.INTFLAGS = 0x01; /* Clear interrupt flags */
 	ADCA.CH0.CTRL |= ADC_CH_START_bm;
 	while(!ADCA.CH0.INTFLAGS);
 	adval = ADCA.CH0RES;
-	//if (adval < 0)
-	//	return 0;
+
+	if (adval < 0)
+		return 0;
 	return adval;
 }
