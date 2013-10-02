@@ -6,6 +6,7 @@ typedef struct {
 	uint8_t   dip_switch;      /* DIP switch value */
 	uint8_t   digital_in;      /* Digital inputs */
 	uint8_t   digital_out;     /* Feedback from digital outputs */
+	uint8_t   over_current;    /* Triggered over current protections */
 	uint16_t  analog_in[12];   /* Twelve analog inputs */
 	uint16_t  int_temp;        /* Internal CPU temperature */
 	uint16_t  int_voltage;     /* Internal VCC voltage */

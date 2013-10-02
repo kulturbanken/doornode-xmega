@@ -100,8 +100,8 @@ typedef enum TWIS_RESULT_enum {
 } TWIS_RESULT_t;
 
 /* Buffer size defines. */
-#define TWIS_RECEIVE_BUFFER_SIZE         8
-#define TWIS_SEND_BUFFER_SIZE            8
+#define TWIS_RECEIVE_BUFFER_SIZE         64
+#define TWIS_SEND_BUFFER_SIZE            64
 
 
 
@@ -115,6 +115,7 @@ typedef struct TWI_Slave {
 	void (*Process_Data) (void);                    /*!< Pointer to process data function*/
 	register8_t receivedData[TWIS_RECEIVE_BUFFER_SIZE]; /*!< Read data*/
 	register8_t sendData[TWIS_SEND_BUFFER_SIZE];        /*!< Data to write*/
+	register8_t bytesToSend;                            /*!< Number of bytes to send */
 	register8_t bytesReceived;                          /*!< Number of bytes received*/
 	register8_t bytesSent;                              /*!< Number of bytes sent*/
 	register8_t status;                                 /*!< Status of transaction*/

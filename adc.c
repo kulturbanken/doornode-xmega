@@ -28,7 +28,7 @@ void adc_init()
 	ADCA.CTRLA = 0x01; /* enable ADC */
 	ADCA.CTRLB = ADC_RESOLUTION_12BIT_gc | ADC_CONMODE_bm; /* 12bit + signed mode */
 	ADCA.REFCTRL = ADC_REFSEL_INT1V_gc /* | ADC_TEMPREF_bm*/;
-	ADCA.PRESCALER = ADC_PRESCALER_DIV8_gc;
+	ADCA.PRESCALER = ADC_PRESCALER_DIV16_gc; /* Best test results with DIV16, do not change! */
 }
 
 #if 0
@@ -55,7 +55,7 @@ int16_t adc_get_cpu_temp()
 }
 #endif
 
-int16_t adc_read(uint8_t channel)
+uint16_t adc_read(uint8_t channel)
 {
 	int16_t adval;
 
@@ -72,5 +72,5 @@ int16_t adc_read(uint8_t channel)
 
 	if (adval < 0)
 		return 0;
-	return adval;
+	return (uint16_t)adval;
 }

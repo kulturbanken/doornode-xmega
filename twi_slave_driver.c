@@ -290,7 +290,7 @@ void TWI_SlaveWriteHandler(TWI_Slave_t *twi)
 	}
 	/* If ACK, master expects more data. */
 	else {
-		if (twi->bytesSent < TWIS_SEND_BUFFER_SIZE) {
+		if (twi->bytesSent < twi->bytesToSend) {
 			uint8_t data = twi->sendData[twi->bytesSent];
 			twi->interface->SLAVE.DATA = data;
 			twi->bytesSent++;

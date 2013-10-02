@@ -6,6 +6,6 @@
 
 extern uint16_t timers[];
 
-void timer_init(void (*cb)(void));
+void timer_init();
 
 #endif
