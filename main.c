@@ -114,5 +114,8 @@ int main(void)
 
 		if (!skip_next)
 			ch++;
+
+		if (ch > 11)
+			ch = 0;
 	}
 }
