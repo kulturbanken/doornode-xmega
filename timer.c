@@ -24,11 +24,11 @@ void timer_init(void (*cb)(void))
 {
 	uint8_t n;
 
-	TCC0.CTRLA = TC_CLKSEL_DIV1024_gc;
-	TCC0.CTRLB = 0x00;          // select mode: Normal
-	TCC0.PER = 2;               // 1000 Hz 
-	TCC0.CNT = 0x00;            // Zähler zurücksetzen
-	TCC0.INTCTRLA = 0b00000011; // Interrupt Highlevel
+	TCC0.CTRLA = TC_CLKSEL_DIV2_gc; // Prescale by 2 = 1MHz @ 2MHz sysclk
+	TCC0.CTRLB = 0x00;              // select mode: Normal
+	TCC0.PER = 1000;                // 1000 Hz
+	TCC0.CNT = 0x00;                // Reset counter
+	TCC0.INTCTRLA = 0b00000011;     // Interrupt Highlevel
 
 	for (n = 0; n < 16; n++)
 		timers[n] = 0;
