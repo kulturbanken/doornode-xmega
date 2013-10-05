@@ -85,6 +85,8 @@ void TWI_SlaveInitializeDriver(TWI_Slave_t *twi,
 	twi->Process_Data = processDataFunction;
 	twi->bytesReceived = 0;
 	twi->bytesSent = 0;
+	twi->bytesToSend = 0;
+	twi->bytesToReceive = 0;
 	twi->status = TWIS_STATUS_READY;
 	twi->result = TWIS_RESULT_UNKNOWN;
 	twi->abort = false;
@@ -102,6 +104,7 @@ void TWI_SlaveInitializeDriver(TWI_Slave_t *twi,
  */
 void TWI_SlaveInitializeModule(TWI_Slave_t *twi,
                                uint8_t address,
+			       uint8_t mask,
                                TWI_SLAVE_INTLVL_t intLevel)
 {
 	twi->interface->SLAVE.CTRLA = intLevel |
@@ -109,6 +112,7 @@ void TWI_SlaveInitializeModule(TWI_Slave_t *twi,
 	                              TWI_SLAVE_APIEN_bm |
 	                              TWI_SLAVE_ENABLE_bm;
 	twi->interface->SLAVE.ADDR = (address<<1);
+	twi->interface->SLAVE.ADDRMASK = (mask<<1);
 }
 
 
@@ -178,6 +182,7 @@ void TWI_SlaveAddressMatchHandler(TWI_Slave_t *twi)
 	} else {
 		twi->status = TWIS_STATUS_BUSY;
 		twi->result = TWIS_RESULT_UNKNOWN;
+		twi->address = (twi->interface->SLAVE.DATA>>1);
 
 		/* Disable stop interrupt. */
 		uint8_t currentCtrlA = twi->interface->SLAVE.CTRLA;
@@ -185,6 +190,11 @@ void TWI_SlaveAddressMatchHandler(TWI_Slave_t *twi)
 
 		twi->bytesReceived = 0;
 		twi->bytesSent = 0;
+		twi->bytesToReceive = 0;
+		twi->bytesToSend = 0;
+
+		/* Process data. */
+		twi->Process_Data();
 
 		/* Send ACK, wait for data interrupt. */
 		twi->interface->SLAVE.CTRLB = TWI_SLAVE_CMD_RESPONSE_gc;
@@ -245,10 +255,10 @@ void TWI_SlaveReadHandler(TWI_Slave_t *twi)
 		uint8_t data = twi->interface->SLAVE.DATA;
 		twi->receivedData[twi->bytesReceived] = data;
 
+		twi->bytesReceived++;
+
 		/* Process data. */
 		twi->Process_Data();
-
-		twi->bytesReceived++;
 
 		/* If application signalling need to abort (error occured),
 		 * complete transaction and wait for next START. Otherwise

@@ -7,8 +7,6 @@ volatile uint16_t timers[16];
 
 ISR(TCC0_OVF_vect)
 {
-	PORTC.OUTTGL = (1<<5);
-
 	uint8_t n;
 
 	for (n = 0; n < 16; n++)

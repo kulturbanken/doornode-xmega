@@ -59,7 +59,6 @@
 #ifndef TWI_DRIVER_H
 #define TWI_DRIVER_H
 
-//#include "avr_compiler.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -111,16 +110,18 @@ typedef enum TWIS_RESULT_enum {
  *  buffers and necessary varibles.
  */
 typedef struct TWI_Slave {
-	TWI_t *interface;                               /*!< Pointer to what interface to use*/
-	void (*Process_Data) (void);                    /*!< Pointer to process data function*/
+	TWI_t *interface;                                   /*!< Pointer to what interface to use*/
+	void (*Process_Data) (void);                        /*!< Pointer to process data function*/
 	register8_t receivedData[TWIS_RECEIVE_BUFFER_SIZE]; /*!< Read data*/
 	register8_t sendData[TWIS_SEND_BUFFER_SIZE];        /*!< Data to write*/
-	register8_t bytesToSend;                            /*!< Number of bytes to send */
+	register8_t bytesToReceive;                         /*!< Number of bytes to receive*/
+	register8_t bytesToSend;                            /*!< Number of bytes to send*/
 	register8_t bytesReceived;                          /*!< Number of bytes received*/
 	register8_t bytesSent;                              /*!< Number of bytes sent*/
 	register8_t status;                                 /*!< Status of transaction*/
 	register8_t result;                                 /*!< Result of transaction*/
-	bool abort;                                     /*!< Strobe to abort*/
+	register8_t address;                                /*!< Address byte received */
+	bool abort;                                         /*!< Strobe to abort*/
 } TWI_Slave_t;
 
 
@@ -131,6 +132,7 @@ void TWI_SlaveInitializeDriver(TWI_Slave_t *twi,
 
 void TWI_SlaveInitializeModule(TWI_Slave_t *twi,
                                uint8_t address,
+			       uint8_t addrmask,
                                TWI_SLAVE_INTLVL_t intLevel);
 
 void TWI_SlaveInterruptHandler(TWI_Slave_t *twi);

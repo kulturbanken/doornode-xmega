@@ -9,17 +9,15 @@
 #include "serial.h"
 #include "iocard.h"
 #include "timer.h"
-#include "twi_slave_driver.h"
+#include "i2c.h"
 
 static uint8_t dip_switch;
 static uint8_t i2c_address;
-static uint8_t digital_out = 0;
 static uint8_t over_current = 0;
+uint8_t digital_out = 0;
 
 static char str[128]; /* printf temporary buffer */
 #define serprintf(fmt, ...) sprintf(str, fmt, ## __VA_ARGS__); serial_send_string(str)
-
-TWI_Slave_t twiSlave;      /*!< TWI slave module. */
 
 #if 0
 static void set_32mhz()
@@ -37,7 +35,19 @@ long map(long x, long in_min, long in_max, long out_min, long out_max)
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-static void set_pin(uint8_t pin)
+static void update_digital_output(void)
+{
+	/* Set all requested output pins except those shutdown
+	   due to over current */
+	uint8_t out_byte = digital_out & (~over_current);
+
+	/* 2 LSB is on PORTE, rest on PORTC */
+	PORTE.OUT = (PORTE.OUT & (~0x03)) | (out_byte & (0x03));
+	PORTC.OUT = (out_byte & (~0x03)) | (PORTC.OUT & 0x03);
+}
+
+#if 0
+static void set_digital_output_pin(uint8_t pin)
 {
 	if (pin < 2) {
 		PORTE.OUTSET = (1 << pin);
@@ -46,7 +56,7 @@ static void set_pin(uint8_t pin)
 	}
 }
 
-static void clr_pin(uint8_t pin)
+static void clr_digital_output_pin(uint8_t pin)
 {
 	if (pin < 2) {
 		PORTE.OUTCLR = (1 << pin);
@@ -54,6 +64,7 @@ static void clr_pin(uint8_t pin)
 		PORTC.OUTCLR = (1 << pin);
 	}
 }
+#endif
 
 #define AD_BUF 4
 static struct cctrl_struct {
@@ -111,23 +122,6 @@ static void update_iocard_struct()
 	sei();
 }
 
-void TWIC_SlaveProcessData(void)
-{
-	uint8_t bufIndex = twiSlave.bytesReceived;
-	twiSlave.sendData[bufIndex] = (~twiSlave.receivedData[bufIndex]);
-}
-
-static volatile uint8_t twi_was_read = 0;
-
-/*! TWIC Slave Interrupt vector. */
-ISR(TWIC_TWIS_vect)
-{
-	memcpy(&twiSlave.sendData, &iocard_data, sizeof(iocard_data));
-	twiSlave.bytesToSend = sizeof(iocard_data);
-	TWI_SlaveInterruptHandler(&twiSlave);
-	twi_was_read = 1;
-}
-
 int main(void)
 {
 	//set_32mhz();
@@ -154,10 +148,8 @@ int main(void)
 	serial_init(0);
         adc_init();
 	timer_init();
+	i2c_init(i2c_address);
 
-	TWI_SlaveInitializeDriver(&twiSlave, &TWIC, TWIC_SlaveProcessData);
-	TWI_SlaveInitializeModule(&twiSlave, dip_switch >> 6, TWI_SLAVE_INTLVL_LO_gc);
-	
 	PMIC.CTRL |= PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm; 
 	sei();
 
@@ -173,14 +165,11 @@ int main(void)
 
 	timers[8] = 1000;
 
+	update_digital_output();
+	
 	while(1) {
-		if (twi_was_read) {
-			twi_was_read = 0;
-			//serprintf("Hey! I2C request received! ch2 = %d\r\n", iocard_data.analog_in[2]);
-		}
-
 		if (timers[8] == 0) {
-			timers[8] = 1000;
+			timers[8] = 100;
 			if (flipflop == 1) {
 				flipflop = 0;
 			} else {
@@ -193,8 +182,8 @@ int main(void)
 					low = avg;
 				if (avg > high)
 					high = avg;
-				serprintf("CH2 = %-5d low = %-5d high = %-5d diff = %-5d | laps = %d Din = 0x%02x mA = %d\r\n",
-					  avg, low, high, high - low, laps, get_digital_in(), ad_to_ma(avg));
+				serprintf("CH2 = %-5d low = %-5d high = %-5d diff = %-3d | laps = %d Din = 0x%02x mA = %d digital_out = 0x%02x\r\n",
+					  avg, low, high, high - low, laps, get_digital_in(), ad_to_ma(avg), digital_out);
 				flipflop = 1;
 			}
 			laps = 0;
@@ -210,25 +199,28 @@ int main(void)
 		if (ch <= 7) {
 			mA = ad_to_ma(ad);
 			if (!cctrl[ch].triggered && mA > 400) {
-				clr_pin(ch);
+				over_current |= (1 << ch);
+				update_digital_output();
+				//clr_digital_output_pin(ch);
 
 				cctrl[ch].triggered = 1;
 				timers[ch] = 1000;
-				over_current |= (1 << ch);
 
 				sprintf(str, "Over current (%d mA) detected on ch %d!\r\n", mA, ch);
 				serial_send_string(str);
 			}
 
 			if (cctrl[ch].triggered && timers[ch] == 0) {
-				cctrl[ch].triggered = 0;
 				over_current &= ~(1 << ch);
+
+				cctrl[ch].triggered = 0;
 				skip_next = 1;
 
 				sprintf(str, "Re-activating output on ch %d.\r\n", ch);
 				serial_send_string(str);
 
-				set_pin(ch);
+				update_digital_output();
+				//set_digital_output_pin(ch);
 			}
 		}
 
@@ -242,3 +234,17 @@ int main(void)
 		}
 	}
 }
+
+ISR(USARTC0_RXC_vect) 
+{ 
+	uint8_t data = USARTC0.DATA;
+
+	if (data >= '0' && data <= '7') {
+		data -= '0';
+		if (digital_out & (1<<data))
+			digital_out &= (~(1<<data));
+		else
+			digital_out |= (1<<data);
+	}
+	update_digital_output();
+} 
