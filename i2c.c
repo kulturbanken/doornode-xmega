@@ -8,6 +8,7 @@
 #include "i2c.h"
 #include "twi_slave_driver.h"
 #include "iocard.h"
+#include "serial.h"
 
 /* TODO: all common handling should be moved to a separate module */
 extern iocard_data_t iocard_data;
@@ -60,6 +61,9 @@ void i2c_init(uint8_t address)
 	/* NOTE: I2C/TWI uses 7 bit addresses! */
 
 	uint8_t addrmask = ~(0x03 << 5); /* 1's in the mask is ignored during match */
+	address <<= 5;
+
+	serprintf("I2C addr = 0x%02X  mask = 0x%02X\r\n", address, addrmask);
 
 	TWI_SlaveInitializeDriver(&twiSlave, &TWIC, TWIC_SlaveProcessData);
 	TWI_SlaveInitializeModule(&twiSlave, address, addrmask, TWI_SLAVE_INTLVL_LO_gc);

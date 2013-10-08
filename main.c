@@ -16,8 +16,7 @@ static uint8_t i2c_address;
 static uint8_t over_current = 0;
 uint8_t digital_out = 0;
 
-static char str[128]; /* printf temporary buffer */
-#define serprintf(fmt, ...) sprintf(str, fmt, ## __VA_ARGS__); serial_send_string(str)
+//static char str[128]; /* printf temporary buffer */
 
 #if 0
 static void set_32mhz()
@@ -165,8 +164,6 @@ int main(void)
 
 	timers[8] = 1000;
 
-	update_digital_output();
-	
 	while(1) {
 		if (timers[8] == 0) {
 			timers[8] = 100;
@@ -189,6 +186,8 @@ int main(void)
 			laps = 0;
 		}
 
+		update_digital_output();
+
 		ad = adc_read(ch);
 
 		for (n = 0; n < AD_BUF-1; n++)
@@ -206,8 +205,7 @@ int main(void)
 				cctrl[ch].triggered = 1;
 				timers[ch] = 1000;
 
-				sprintf(str, "Over current (%d mA) detected on ch %d!\r\n", mA, ch);
-				serial_send_string(str);
+				serprintf(str, "Over current (%d mA) detected on ch %d!\r\n", mA, ch);
 			}
 
 			if (cctrl[ch].triggered && timers[ch] == 0) {
@@ -216,8 +214,7 @@ int main(void)
 				cctrl[ch].triggered = 0;
 				skip_next = 1;
 
-				sprintf(str, "Re-activating output on ch %d.\r\n", ch);
-				serial_send_string(str);
+				serprintf(str, "Re-activating output on ch %d.\r\n", ch);
 
 				update_digital_output();
 				//set_digital_output_pin(ch);
@@ -235,6 +232,7 @@ int main(void)
 	}
 }
 
+/*
 ISR(USARTC0_RXC_vect) 
 { 
 	uint8_t data = USARTC0.DATA;
@@ -248,3 +246,4 @@ ISR(USARTC0_RXC_vect)
 	}
 	update_digital_output();
 } 
+*/

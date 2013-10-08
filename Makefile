@@ -10,7 +10,7 @@ LDFLAGS	= -Wl,-Map,$(TARGET).map
 SFLAGS	=
 HFLAGS	= -d2
 TARGET	= $(MCU)
-OBJS	= main.o serial.o adc.o timer.o twi_slave_driver.o i2c.o
+OBJS	= main.o serial.o adc.o timer.o twi_slave_driver.o i2c.o usart_driver.o
 
 PROGRAMMER = dragon_pdi
 PRG_PORT   = usb
