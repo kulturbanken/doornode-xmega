@@ -16,8 +16,6 @@ static uint8_t i2c_address;
 static uint8_t over_current = 0;
 uint8_t digital_out = 0;
 
-//static char str[128]; /* printf temporary buffer */
-
 #if 0
 static void set_32mhz()
 {
@@ -31,7 +29,7 @@ static void set_32mhz()
 
 long map(long x, long in_min, long in_max, long out_min, long out_max)
 {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 static void update_digital_output(void)
@@ -40,30 +38,10 @@ static void update_digital_output(void)
 	   due to over current */
 	uint8_t out_byte = digital_out & (~over_current);
 
-	/* 2 LSB is on PORTE, rest on PORTC */
-	PORTE.OUT = (PORTE.OUT & (~0x03)) | (out_byte & (0x03));
-	PORTC.OUT = (out_byte & (~0x03)) | (PORTC.OUT & 0x03);
+	/* 3 LSB is on PORTE, rest on PORTC */
+	PORTE.OUT = (PORTE.OUT & (~0x07)) | (out_byte & (0x07));
+	PORTC.OUT = (out_byte & (~0x07)) | (PORTC.OUT & 0x07);
 }
-
-#if 0
-static void set_digital_output_pin(uint8_t pin)
-{
-	if (pin < 2) {
-		PORTE.OUTSET = (1 << pin);
-	} else {
-		PORTC.OUTSET = (1 << pin);
-	}
-}
-
-static void clr_digital_output_pin(uint8_t pin)
-{
-	if (pin < 2) {
-		PORTE.OUTCLR = (1 << pin);
-	} else {
-		PORTC.OUTCLR = (1 << pin);
-	}
-}
-#endif
 
 #define AD_BUF 4
 static struct cctrl_struct {
@@ -126,25 +104,29 @@ int main(void)
 	//set_32mhz();
 
 	PORTA.DIR = 0x00;
-	PORTC.DIR = 0xFC;
-	PORTC.OUT = 0xFC;
+	PORTB.DIR = 0x00;
+	PORTC.DIR = 0b11111100;
+	PORTC.OUT = 0x00;
 	PORTD.DIR = 0x00;
 	PORTCFG.MPCMASK = 0xFF; /* "select" all pins */
 	PORTD.PIN0CTRL = PORT_OPC_PULLUP_gc | PORT_INVEN_bm; /* enable pull-up and inverted input on selected pins */
-	PORTE.DIR = 0x03;
-	PORTE.OUT = 0x03;
+	PORTE.DIR = 0b00000111;
+	PORTE.OUT = 0x00;
 	PORTR.DIR = 0x00;
-
+	/* Invert digital input */
+	PORTE.PIN3CTRL = PORT_INVEN_bm;
+	PORTR.PIN0CTRL = PORT_INVEN_bm;
+	PORTR.PIN1CTRL = PORT_INVEN_bm;
 	_delay_ms(1);
 
 	dip_switch = PORTD.IN;
 	i2c_address = dip_switch >> 6;
 
 	/* Reset DIP pins for serial use etc */
-	PORTCFG.MPCMASK = 0xFF;
-	PORTD.PIN0CTRL = 0;
+	//PORTCFG.MPCMASK = 0xFF;
+	//PORTD.PIN0CTRL = 0;
 
-	serial_init(0);
+	//serial_init(0);
         adc_init();
 	timer_init();
 	i2c_init(i2c_address);
@@ -179,8 +161,8 @@ int main(void)
 					low = avg;
 				if (avg > high)
 					high = avg;
-				serprintf("CH2 = %-5d low = %-5d high = %-5d diff = %-3d | laps = %d Din = 0x%02x mA = %d digital_out = 0x%02x\r\n",
-					  avg, low, high, high - low, laps, get_digital_in(), ad_to_ma(avg), digital_out);
+				serprintf("CH2 = %-5d low = %-5d high = %-5d diff = %-3d | PORTD = 0x%02x laps = %d Din = 0x%02x mA = %d digital_out = 0x%02x\r\n",
+					  avg, low, high, high - low, PORTD.IN, laps, get_digital_in(), ad_to_ma(avg), digital_out);
 				flipflop = 1;
 			}
 			laps = 0;
