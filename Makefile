@@ -3,7 +3,7 @@ OBJCOPY	= avr-objcopy
 OBJDUMP	= avr-objdump
 SIZE	= avr-size
 HIDSPX	= hidspx
-MCU	= atxmega16d4
+MCU	= atxmega32d4
 CFLAGS	= -Os -Wall -mmcu=$(MCU) -DF_CPU=2000000
 LIBS	=
 LDFLAGS	= -Wl,-Map,$(TARGET).map
