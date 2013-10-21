@@ -13,6 +13,8 @@
 
 USART_data_t USART_data;
 
+static bool serial_is_initiated = 0;
+
 void serial_init(int baudrate)
 {
 	PORT.DIRSET = PIN3_bm; /* Px3 TXD as output */
@@ -49,10 +51,14 @@ void serial_init(int baudrate)
 	USART.CTRLA = USART_RXCINTLVL_LO_gc; 
 	USART.CTRLB = USART_TXEN_bm | USART_RXEN_bm;
 	*/
+
+	serial_is_initiated = 1;
 }
 
 void serial_send_char(char c)
 {
+	if (!serial_is_initiated)
+		return;
 	/*
 	USART.DATA = c;
 	if(!(USART.STATUS & USART_DREIF_bm))
