@@ -59,10 +59,10 @@ uint16_t adc_read(uint8_t channel)
 {
 	int16_t adval;
 
-	//ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc | ADC_CH_GAIN_1X_gc;
-	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_DIFF_gc | ADC_CH_GAIN_1X_gc;
+	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc | ADC_CH_GAIN_1X_gc;
+	//ADCA.CH0.CTRL = ADC_CH_INPUTMODE_DIFF_gc | ADC_CH_GAIN_1X_gc;
 	ADCA.CH0.MUXCTRL  = ((channel & 0x0F) << 3);
-	ADCA.CH0.MUXCTRL |= 0x05; /* PAD GND as negative reference */
+	//ADCA.CH0.MUXCTRL |= 0x07; /* PAD GND as negative reference */
 	//ADCA.CH0.MUXCTRL |= ADC_CH_MUXNEG_PIN3_gc;
 
 	ADCA.CH0.INTFLAGS = 0x01; /* Clear interrupt flags */
