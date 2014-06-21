@@ -146,23 +146,42 @@ int main(void)
 
 	timers[8] = 1000;
 
+	char *chtxt[] = {
+			"SIR1", "FLA1", "SIR2", "FLA2",
+			"LCK2", "LCK1", "KPAD", "IR",
+			"VOLT", "TAMP", "IR1",  "IR2"
+	};
+
+	serprintf("\r\n\r\n");
+	for (n = 0; n < 12; n++) {
+		serprintf(" CH%-2d | ", n);
+	}
+	serprintf("\r\n");
+	for (n = 0; n < 12; n++) {
+		serprintf(" %4s | ", chtxt[n]);
+	}
+	serprintf("\r\n");
+
 	while(1) {
 		if (timers[8] == 0) {
 			timers[8] = 100;
 			if (flipflop == 1) {
 				flipflop = 0;
 			} else {
-				avg = 0;
-				for (n = 0; n < AD_BUF; n++)
-					avg += cctrl[2].adval[n];
-				avg /= AD_BUF;
-
+				serprintf("\r");
+				for (n = 0; n < 12; n++) {
+					serprintf("%5d | ", get_analog_avg(&cctrl[n]));
+				}
+				serprintf("%5d", laps);
+#if 0
+				avg = get_analog_avg(&cctrl[2]);
 				if (avg < low)
 					low = avg;
 				if (avg > high)
 					high = avg;
 				serprintf("CH2 = %-5d low = %-5d high = %-5d diff = %-3d | PORTD = 0x%02x laps = %d Din = 0x%02x mA = %d digital_out = 0x%02x\r\n",
 					  avg, low, high, high - low, PORTD.IN, laps, get_digital_in(), ad_to_ma(avg), digital_out);
+#endif
 				flipflop = 1;
 			}
 			laps = 0;
