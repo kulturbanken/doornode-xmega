@@ -43,7 +43,7 @@ static void update_digital_output(void)
 	PORTC.OUT = (out_byte & (~0x07)) | (PORTC.OUT & 0x07);
 }
 
-#define AD_BUF 4
+#define AD_BUF 16
 static struct cctrl_struct {
 	uint8_t  triggered;
 	int16_t adval[AD_BUF];
@@ -72,13 +72,13 @@ static inline uint16_t ad_to_ma(uint16_t ad)
 static inline uint16_t get_analog_avg(struct cctrl_struct *ch)
 {
 	uint8_t n;
-	uint16_t ret = 0;
+	uint32_t ret = 0;
 
 	for (n = 0; n < AD_BUF; n++)
 		ret += ch->adval[n];
 	ret /= AD_BUF;
 
-	return ret;
+	return (uint16_t)ret;
 }
 
 static void update_iocard_struct()
@@ -127,7 +127,7 @@ int main(void)
 	//PORTD.PIN0CTRL = 0;
 
 	//serial_init(0);
-        adc_init();
+	adc_init();
 	timer_init();
 	i2c_init(i2c_address);
 
