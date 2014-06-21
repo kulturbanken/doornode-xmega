@@ -142,7 +142,7 @@ int main(void)
 	serprintf("sizeof(iocard_data) = %d\r\n", sizeof(iocard_data));
 
 	uint16_t ad, mA, low = 9999, high = 0, laps = 0, avg, flipflop = 0;
-	uint8_t ch = 0, skip_next, n;
+	uint8_t ch = 0, n;
 
 	timers[8] = 1000;
 
@@ -195,7 +195,6 @@ int main(void)
 			cctrl[ch].adval[n] = cctrl[ch].adval[n+1];
 		cctrl[ch].adval[AD_BUF-1] = ad;
 		
-		skip_next = 0;
 		if (ch <= 7) {
 			mA = ad_to_ma(ad);
 			if (!cctrl[ch].triggered && mA > 400) {
@@ -213,7 +212,6 @@ int main(void)
 				over_current &= ~(1 << ch);
 
 				cctrl[ch].triggered = 0;
-				skip_next = 1;
 
 				serprintf(str, "Re-activating output on ch %d.\r\n", ch);
 
@@ -221,9 +219,6 @@ int main(void)
 				//set_digital_output_pin(ch);
 			}
 		}
-
-		if (!skip_next)
-			ch++;
 
 		if (ch > 11) {
 			ch = 0;
