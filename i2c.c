@@ -7,6 +7,7 @@
 
 #include "i2c.h"
 #include "twi_slave_driver.h"
+#include "wdt_driver.h"
 #include "iocard.h"
 #include "serial.h"
 
@@ -26,6 +27,7 @@ void TWIC_SlaveProcessData(void)
 		if (twiSlave.bytesReceived == 0) {
 			memcpy(&twiSlave.sendData, &iocard_data, sizeof(iocard_data));
 			twiSlave.bytesToSend = sizeof(iocard_data);
+			WDT_Reset();
 		}
 		break;
 	case I2C_CMD_SET_OUTPUT:

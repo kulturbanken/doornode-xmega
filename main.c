@@ -10,6 +10,7 @@
 #include "iocard.h"
 #include "timer.h"
 #include "i2c.h"
+#include "wdt_driver.h"
 
 #define IOCARD_FIRMWARE_VERSION 2
 #define DEBUG_PRINT_TIMER  8
@@ -161,6 +162,8 @@ int main(void)
 	//PORTCFG.MPCMASK = 0xFF;
 	//PORTD.PIN0CTRL = 0;
 
+	/* Enable 8 second watchdog, will only reset on I2C requests */
+	WDT_EnableAndSetTimeout( WDT_PER_8KCLK_gc );
 
 #ifdef SERIAL_DEBUG_PRINT
 	serial_init(0);
