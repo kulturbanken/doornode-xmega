@@ -220,6 +220,8 @@ int main(void)
 			}
 		}
 
+		ch++;
+
 		if (ch > 11) {
 			ch = 0;
 			update_iocard_struct();
