@@ -30,14 +30,7 @@ void serial_init(int baudrate)
 	/* Enable RXC interrupt. */
 	USART_RxdInterruptLevel_Set(USART_data.usart, USART_RXCINTLVL_LO_gc);
 
-	/* Set Baudrate to 9600 bps:
-	 * Use the default I/O clock frequency that is 2 MHz.
-	 * Do not use the baudrate scale factor
-	 *
-	 * Baudrate select = (1/(16*(((I/O clock frequency)/Baudrate)-1)
-	 *                 = 12
-	 */
-	//USART_Baudrate_Set(&USART, 12 , 0);
+	/* Set Baudrate to 115200 */
 	USART_Baudrate_Set(&USART, BSEL, -7);
 
 	/* Enable both RX and TX. */
