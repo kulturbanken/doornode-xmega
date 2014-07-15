@@ -11,10 +11,17 @@
 #include "timer.h"
 #include "i2c.h"
 
+#define IOCARD_FIRMWARE_VERSION 2
+#define DEBUG_PRINT_TIMER  8
+
+//#define SERIAL_DEBUG_PRINT
+
 static uint8_t dip_switch;
 static uint8_t i2c_address;
 static uint8_t over_current = 0;
-uint8_t digital_out = 0;
+
+volatile uint8_t digital_out = 0;
+volatile iocard_data_t iocard_data;
 
 #if 0
 static void set_32mhz()
@@ -48,8 +55,6 @@ static struct cctrl_struct {
 	uint8_t  triggered;
 	int16_t adval[AD_BUF];
 } cctrl[12];
-
-iocard_data_t iocard_data;
 
 static inline uint8_t get_digital_in()
 {
@@ -86,7 +91,7 @@ static void update_iocard_struct()
 	uint8_t n;
 	
 	cli();
-	iocard_data.version = 1;
+	iocard_data.version = IOCARD_FIRMWARE_VERSION;
 	iocard_data.dip_switch = dip_switch;
 	iocard_data.digital_in = get_digital_in();
 	iocard_data.digital_out = digital_out;
@@ -98,6 +103,36 @@ static void update_iocard_struct()
 	iocard_data.int_bandgap = 0;
 	sei();
 }
+
+static unsigned int laps = 0;
+
+#ifdef SERIAL_DEBUG_PRINT
+static void debug_print()
+{
+	int n;
+	static int flipflop = 0;
+
+	if (flipflop == 1) {
+		flipflop = 0;
+	} else {
+		serprintf("\r");
+		for (n = 0; n < 12; n++) {
+			serprintf("%5d | ", get_analog_avg(&cctrl[n]));
+		}
+		serprintf("%5d", laps);
+#if 0
+		avg = get_analog_avg(&cctrl[2]);
+		if (avg < low)
+			low = avg;
+		if (avg > high)
+			high = avg;
+		serprintf("CH2 = %-5d low = %-5d high = %-5d diff = %-3d | PORTD = 0x%02x laps = %d Din = 0x%02x mA = %d digital_out = 0x%02x\r\n",
+			  avg, low, high, high - low, PORTD.IN, laps, get_digital_in(), ad_to_ma(avg), digital_out);
+#endif
+		flipflop = 1;
+	}
+}
+#endif
 
 int main(void)
 {
@@ -126,7 +161,10 @@ int main(void)
 	//PORTCFG.MPCMASK = 0xFF;
 	//PORTD.PIN0CTRL = 0;
 
-	//serial_init(0);
+
+#ifdef SERIAL_DEBUG_PRINT
+	serial_init(0);
+#endif
 	adc_init();
 	timer_init();
 	i2c_init(i2c_address);
@@ -136,15 +174,13 @@ int main(void)
 
 	_delay_ms(100);
 
+	int n;
+
+#ifdef SERIAL_DEBUG_PRINT
 	serprintf("\r\nStarting up...\r\n");
 	serprintf("DIP switch = 0x%02x\r\n", dip_switch);
 	serprintf("I2C address = %d\r\n", i2c_address);
 	serprintf("sizeof(iocard_data) = %d\r\n", sizeof(iocard_data));
-
-	uint16_t ad, mA, low = 9999, high = 0, laps = 0, avg, flipflop = 0;
-	uint8_t ch = 0, n;
-
-	timers[8] = 1000;
 
 	char *chtxt[] = {
 			"SIR1", "FLA1", "SIR2", "FLA2",
@@ -153,40 +189,27 @@ int main(void)
 	};
 
 	serprintf("\r\n\r\n");
-	for (n = 0; n < 12; n++) {
+	for (n = 0; n < 12; n++)
 		serprintf(" CH%-2d | ", n);
-	}
 	serprintf("\r\n");
-	for (n = 0; n < 12; n++) {
+	for (n = 0; n < 12; n++)
 		serprintf(" %4s | ", chtxt[n]);
-	}
 	serprintf("\r\n");
+
+	timers[DEBUG_PRINT_TIMER] = 1000;
+#endif
+
+	uint16_t ad, mA;
+	uint8_t ch = 0;
 
 	while(1) {
-		if (timers[8] == 0) {
-			timers[8] = 100;
-			if (flipflop == 1) {
-				flipflop = 0;
-			} else {
-				serprintf("\r");
-				for (n = 0; n < 12; n++) {
-					serprintf("%5d | ", get_analog_avg(&cctrl[n]));
-				}
-				serprintf("%5d", laps);
-#if 0
-				avg = get_analog_avg(&cctrl[2]);
-				if (avg < low)
-					low = avg;
-				if (avg > high)
-					high = avg;
-				serprintf("CH2 = %-5d low = %-5d high = %-5d diff = %-3d | PORTD = 0x%02x laps = %d Din = 0x%02x mA = %d digital_out = 0x%02x\r\n",
-					  avg, low, high, high - low, PORTD.IN, laps, get_digital_in(), ad_to_ma(avg), digital_out);
-#endif
-				flipflop = 1;
-			}
-			laps = 0;
-		}
 
+#ifdef SERIAL_DEBUG_PRINT
+		if (timers[DEBUG_PRINT_TIMER] == 0) {
+			timers[DEBUG_PRINT_TIMER] = 100;
+			debug_print();
+		}
+#endif
 		update_digital_output();
 
 		ad = adc_read(ch);
@@ -200,23 +223,14 @@ int main(void)
 			if (!cctrl[ch].triggered && mA > 400) {
 				over_current |= (1 << ch);
 				update_digital_output();
-				//clr_digital_output_pin(ch);
-
 				cctrl[ch].triggered = 1;
 				timers[ch] = 1000;
-
-				serprintf(str, "Over current (%d mA) detected on ch %d!\r\n", mA, ch);
 			}
 
 			if (cctrl[ch].triggered && timers[ch] == 0) {
 				over_current &= ~(1 << ch);
-
 				cctrl[ch].triggered = 0;
-
-				serprintf(str, "Re-activating output on ch %d.\r\n", ch);
-
 				update_digital_output();
-				//set_digital_output_pin(ch);
 			}
 		}
 
