@@ -20,24 +20,73 @@
 static uint8_t dip_switch;
 static uint8_t i2c_address;
 static uint8_t over_current = 0;
+static bool current_control[8];
 
 volatile uint8_t digital_out = 0;
 volatile iocard_data_t iocard_data;
 
-#if 0
-static void set_32mhz()
-{
-	CCP = CCP_IOREG_gc;              // disable register security for oscillator update
-	OSC.CTRL = OSC_RC32MEN_bm;       // enable 32MHz oscillator
-	while(!(OSC.STATUS & OSC_RC32MRDY_bm)); // wait for oscillator to be ready
-	CCP = CCP_IOREG_gc;              // disable register security for clock update
-	CLK.CTRL = CLK_SCLKSEL_RC32M_gc; // switch to 32MHz clock
-}
-#endif
+#define MED_VALUES 5   // samples for median calculation, must be an odd number
+#define AVG_VALUES 4   // values saved for average calculation
 
-long map(long x, long in_min, long in_max, long out_min, long out_max)
+static struct {
+	uint16_t samples[MED_VALUES];
+	uint16_t values[AVG_VALUES];
+	int samples_offset;
+	int values_offset;
+} ad_array[12];
+
+static void add_ad_sample(int channel, uint16_t sample)
 {
-	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+	int samples_offset = (ad_array[channel].samples_offset + 1) % MED_VALUES;
+	ad_array[channel].samples_offset = samples_offset;
+
+	ad_array[channel].samples[samples_offset] = sample;
+
+	/* Now sort to find median */
+	uint16_t sorted[MED_VALUES];
+	int j;
+	for (j = 0; j < MED_VALUES; j++)
+		sorted[j] = ad_array[channel].samples[j];
+
+	/* Only sort half of the values, since we just need the one in the middle */
+	for (j = 0; j < (MED_VALUES >> 1) + 1; j++) {
+		int k, min = j;
+		for (k = j + 1; k < MED_VALUES; k++)
+			if (sorted[k] < sorted[min])
+				min = k;
+		const uint16_t temp = sorted[j];
+		sorted[j] = sorted[min];
+		sorted[min] = temp;
+	}
+
+	uint16_t median = sorted[(MED_VALUES >> 1) + 1];
+
+	/* Insert the newly calculated median value in list of values */
+	int values_offset = (ad_array[channel].values_offset + 1) % AVG_VALUES;
+	ad_array[channel].values_offset = values_offset;
+	ad_array[channel].values[values_offset] = median;
+}
+
+static uint16_t get_average_ad_value(int channel)
+{
+	int j;
+	uint32_t total = 0;
+	for (j = 0; j < AVG_VALUES; j++)
+		total += ad_array[channel].values[j];
+
+	return (total / AVG_VALUES);
+}
+
+/*
+	Since the ADC is nothing but linear, the multiplication factor differ depending 
+	on measure ranges.
+
+	After some investigations, 1.45 seems to be some sort of happy medium.
+
+*/
+static int ad_to_ma(uint16_t ad)
+{
+	return (int)(ad * 1.45);
 }
 
 static void update_digital_output(void)
@@ -50,12 +99,6 @@ static void update_digital_output(void)
 	PORTE.OUT = (PORTE.OUT & (~0x07)) | (out_byte & (0x07));
 	PORTC.OUT = (out_byte & (~0x07)) | (PORTC.OUT & 0x07);
 }
-
-#define AD_BUF 16
-static struct cctrl_struct {
-	uint8_t  triggered;
-	int16_t adval[AD_BUF];
-} cctrl[12];
 
 static inline uint8_t get_digital_in()
 {
@@ -70,23 +113,6 @@ static inline uint8_t get_digital_in()
 	return ret;
 }
 
-static inline uint16_t ad_to_ma(uint16_t ad)
-{
-	return map(ad, 140, 662, 200, 947);
-}
-
-static inline uint16_t get_analog_avg(struct cctrl_struct *ch)
-{
-	uint8_t n;
-	uint32_t ret = 0;
-
-	for (n = 0; n < AD_BUF; n++)
-		ret += ch->adval[n];
-	ret /= AD_BUF;
-
-	return (uint16_t)ret;
-}
-
 static void update_iocard_struct()
 {
 	uint8_t n;
@@ -98,7 +124,7 @@ static void update_iocard_struct()
 	iocard_data.digital_out = digital_out;
 	iocard_data.over_current = over_current;
 	for (n = 0; n < 12; n++)
-		iocard_data.analog_in[n] = get_analog_avg(&cctrl[n]);
+		iocard_data.analog_in[n] = get_average_ad_value(n);
 	iocard_data.int_temp = 0;
 	iocard_data.int_voltage = 0;
 	iocard_data.int_bandgap = 0;
@@ -118,11 +144,11 @@ static void debug_print()
 	} else {
 		serprintf("\r");
 		for (n = 0; n < 12; n++) {
-			serprintf("%5d | ", get_analog_avg(&cctrl[n]));
+			serprintf("%5d | ", n < 8 ? ad_to_ma(get_average_ad_value(n)) : get_average_ad_value(n));
 		}
 		serprintf("%5d", laps);
 #if 0
-		avg = get_analog_avg(&cctrl[2]);
+		avg = get_average_ad_value(2);
 		if (avg < low)
 			low = avg;
 		if (avg > high)
@@ -131,6 +157,7 @@ static void debug_print()
 			  avg, low, high, high - low, PORTD.IN, laps, get_digital_in(), ad_to_ma(avg), digital_out);
 #endif
 		flipflop = 1;
+		laps = 0;
 	}
 }
 #endif
@@ -162,8 +189,10 @@ int main(void)
 	//PORTCFG.MPCMASK = 0xFF;
 	//PORTD.PIN0CTRL = 0;
 
+#ifndef SERIAL_DEBUG_PRINT
 	/* Enable 8 second watchdog, will only reset on I2C requests */
 	WDT_EnableAndSetTimeout( WDT_PER_8KCLK_gc );
+#endif
 
 #ifdef SERIAL_DEBUG_PRINT
 	serial_init(0);
@@ -217,22 +246,20 @@ int main(void)
 
 		ad = adc_read(ch);
 
-		for (n = 0; n < AD_BUF-1; n++)
-			cctrl[ch].adval[n] = cctrl[ch].adval[n+1];
-		cctrl[ch].adval[AD_BUF-1] = ad;
+		add_ad_sample(ch, ad);
 		
 		if (ch <= 7) {
 			mA = ad_to_ma(ad);
-			if (!cctrl[ch].triggered && mA > 400) {
+			if (!current_control[ch] && mA > 400) {
 				over_current |= (1 << ch);
 				update_digital_output();
-				cctrl[ch].triggered = 1;
+				current_control[ch] = true;
 				timers[ch] = 1000;
 			}
 
-			if (cctrl[ch].triggered && timers[ch] == 0) {
+			if (current_control[ch] && timers[ch] == 0) {
 				over_current &= ~(1 << ch);
-				cctrl[ch].triggered = 0;
+				current_control[ch] = 0;
 				update_digital_output();
 			}
 		}
